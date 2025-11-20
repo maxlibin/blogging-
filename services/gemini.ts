@@ -1,3 +1,5 @@
+"use server";
+
 import { GoogleGenAI, Type } from "@google/genai";
 import { ResearchSource } from "../types";
 

@@ -1,24 +1,28 @@
-import React, { useState } from 'react';
+"use client";
+
+import React, { useState, useEffect } from 'react';
 import { WordPressSettings } from '../types';
 import { validateWPConnection } from '../services/wordpress';
+import { useWordPress } from '../contexts/WordPressContext';
 import { CheckCircle, AlertCircle, Loader2, Globe, Lock, User } from 'lucide-react';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from './ui/card';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from './ui/card';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Button } from './ui/button';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 import { Badge } from './ui/badge';
 
-interface Props {
-  settings: WordPressSettings;
-  onSave: (settings: WordPressSettings) => void;
-}
-
-export const ConnectWordPress: React.FC<Props> = ({ settings, onSave }) => {
+export const ConnectWordPress: React.FC = () => {
+  const { settings, updateSettings } = useWordPress();
   const [formData, setFormData] = useState<WordPressSettings>(settings);
   const [isValidating, setIsValidating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+
+  // Sync form with context if context changes externally
+  useEffect(() => {
+    setFormData(settings);
+  }, [settings]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -37,10 +41,10 @@ export const ConnectWordPress: React.FC<Props> = ({ settings, onSave }) => {
 
     if (isValid) {
       setSuccess(true);
-      onSave({ ...formData, isConnected: true });
+      updateSettings({ ...formData, isConnected: true });
     } else {
       setError("Could not connect to WordPress. Please check your URL and credentials.");
-      onSave({ ...formData, isConnected: false });
+      updateSettings({ ...formData, isConnected: false });
     }
   };
 
