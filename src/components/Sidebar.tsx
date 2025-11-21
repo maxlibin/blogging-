@@ -1,8 +1,10 @@
 
+
 "use client";
 
 import React, { useState } from 'react';
-import { NavLink } from 'react-router-dom';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { LayoutDashboard, PenTool, Settings, LogOut, Zap, CheckCircle2 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useWordPress } from '../contexts/WordPressContext';
@@ -15,14 +17,14 @@ interface SidebarProps {
 
 // Simple internal Tooltip component for the sidebar
 const SidebarItem = ({ 
-  to, 
+  href, 
   icon: Icon, 
   label, 
   isActive, 
   onClick, 
   showLabel 
 }: { 
-  to: string; 
+  href: string; 
   icon: any; 
   label: string; 
   isActive: boolean; 
@@ -30,8 +32,8 @@ const SidebarItem = ({
   showLabel: boolean;
 }) => {
   return (
-    <NavLink
-      to={to}
+    <Link
+      href={href}
       onClick={onClick}
       className={cn(
         "group relative flex items-center transition-all duration-200 rounded-xl",
@@ -57,12 +59,13 @@ const SidebarItem = ({
           <div className="absolute top-1/2 -left-1 -translate-y-1/2 w-2 h-2 bg-slate-900 rotate-45"></div>
         </div>
       )}
-    </NavLink>
+    </Link>
   );
 };
 
 export const Sidebar: React.FC<SidebarProps> = ({ className, onLinkClick, showLabels = false }) => {
   const { settings, isLoaded } = useWordPress();
+  const pathname = usePathname();
 
   const links = [
     { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
@@ -78,7 +81,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ className, onLinkClick, showLa
     )}>
       {/* Logo Section */}
       <div className={cn("h-24 flex items-center", showLabels ? "px-8" : "justify-center")}>
-        <NavLink to="/" className="flex items-center gap-2 text-slate-900 group">
+        <Link href="/" className="flex items-center gap-2 text-slate-900 group">
            <div className="flex items-center justify-center w-10 h-10 bg-purple-600 text-white rounded-xl transform transition-transform group-hover:rotate-3 shadow-lg shadow-purple-200">
              <div className="w-3 h-3 bg-white rounded-full" />
            </div>
@@ -87,31 +90,22 @@ export const Sidebar: React.FC<SidebarProps> = ({ className, onLinkClick, showLa
                Ai<span className="text-purple-600">Writer</span>
              </span>
            )}
-        </NavLink>
+        </Link>
       </div>
       
       {/* Navigation */}
       <nav className={cn("flex-1 space-y-4 py-4", showLabels ? "px-4" : "px-0 w-full flex flex-col items-center")}>
         {links.map((link) => (
-          <NavLink
-            key={link.href}
-            to={link.href}
-            className={({ isActive }) => {
-                // We use a render prop to pass isActive state to our custom component
-                return "block"; 
-            }}
-          >
-            {({ isActive }) => (
-               <SidebarItem 
-                 to={link.href}
-                 icon={link.icon}
-                 label={link.label}
-                 isActive={isActive}
-                 onClick={onLinkClick}
-                 showLabel={showLabels}
-               />
-            )}
-          </NavLink>
+          <div key={link.href} className="block">
+             <SidebarItem 
+               href={link.href}
+               icon={link.icon}
+               label={link.label}
+               isActive={pathname === link.href}
+               onClick={onLinkClick}
+               showLabel={showLabels}
+             />
+          </div>
         ))}
       </nav>
 
@@ -166,8 +160,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ className, onLinkClick, showLa
                </div>
             )}
             
-            <NavLink 
-               to="/" 
+            <Link 
+               href="/" 
                className={cn(
                   "flex items-center transition-colors", 
                   showLabels 
@@ -178,7 +172,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ className, onLinkClick, showLa
             >
                 <LogOut size={18} />
                 {showLabels && <span>Sign Out</span>}
-            </NavLink>
+            </Link>
          </div>
       </div>
     </aside>

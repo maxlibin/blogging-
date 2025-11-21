@@ -1,8 +1,7 @@
 import React from 'react';
-import { Sidebar } from '../components/Sidebar';
-import { MobileHeader } from '../components/MobileHeader';
+import { Sidebar } from '../../components/Sidebar';
+import { MobileHeader } from '../../components/MobileHeader';
 
-// This is the layout specifically for the dashboard/app area
 export default function DashboardLayout({
   children,
 }: {

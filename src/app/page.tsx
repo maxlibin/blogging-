@@ -1,7 +1,7 @@
-"use client";
+
 
 import React from 'react';
-import { Link } from 'react-router-dom';
+import Link from 'next/link';
 import { 
   PenTool, 
   Settings, 
@@ -25,7 +25,7 @@ import {
   Layers,
   ArrowRight
 } from 'lucide-react';
-import { Button } from '../../components/ui/button';
+import { Button } from '../components/ui/button';
 
 export default function LandingPage() {
   return (
@@ -55,10 +55,10 @@ export default function LandingPage() {
         </div>
 
         <div className="flex items-center gap-4">
-           <Link to="/dashboard" className="text-sm font-medium text-slate-900 hidden sm:block hover:text-purple-600 transition-colors">
+           <Link href="/dashboard" className="text-sm font-medium text-slate-900 hidden sm:block hover:text-purple-600 transition-colors">
              Login
            </Link>
-           <Link to="/dashboard">
+           <Link href="/dashboard">
              <button className="bg-black text-white text-sm font-bold px-6 py-2.5 rounded-full hover:bg-slate-800 transition-all hover:scale-105 shadow-lg">
                Free Trials
              </button>
@@ -80,7 +80,7 @@ export default function LandingPage() {
               Instant Marketing Copy <br/>
               with Free AI Writer
             </h1>
-             <Link to="/dashboard">
+             <Link href="/dashboard">
                <button className="bg-[#8B5CF6] text-white text-base font-bold px-8 py-3.5 rounded-full hover:bg-[#7C3AED] transition-all shadow-[0_10px_20px_-5px_rgba(139,92,246,0.4)] hover:shadow-[0_15px_25px_-5px_rgba(139,92,246,0.5)] hover:-translate-y-1">
                  Generate Now
                </button>
@@ -362,7 +362,7 @@ export default function LandingPage() {
                   </div>
                   
                   <div className="pt-4">
-                     <Link to="/dashboard">
+                     <Link href="/dashboard">
                        <Button size="lg" className="rounded-full px-8 bg-slate-900 hover:bg-slate-800">
                          Start Writing for Free <ArrowRight className="ml-2 h-4 w-4" />
                        </Button>
@@ -408,7 +408,7 @@ export default function LandingPage() {
                      <PricingCheck text="Basic Research" />
                      <PricingCheck text="Standard Support" />
                   </ul>
-                  <Link to="/dashboard">
+                  <Link href="/dashboard">
                      <button className="w-full py-3 rounded-full border border-slate-600 font-bold hover:bg-white hover:text-black transition-all">Get Started</button>
                   </Link>
                </div>
@@ -430,7 +430,7 @@ export default function LandingPage() {
                      <PricingCheck text="WordPress Auto-Sync" dark />
                      <PricingCheck text="Priority Support" dark />
                   </ul>
-                  <Link to="/dashboard">
+                  <Link href="/dashboard">
                      <button className="w-full py-3 rounded-full bg-purple-600 text-white font-bold hover:bg-purple-700 transition-all shadow-lg shadow-purple-200">Start Pro Trial</button>
                   </Link>
                </div>
@@ -451,7 +451,7 @@ export default function LandingPage() {
                      <PricingCheck text="API Access" />
                      <PricingCheck text="Custom Integrations" />
                   </ul>
-                  <Link to="/dashboard">
+                  <Link href="/dashboard">
                      <button className="w-full py-3 rounded-full border border-slate-600 font-bold hover:bg-white hover:text-black transition-all">Contact Sales</button>
                   </Link>
                </div>

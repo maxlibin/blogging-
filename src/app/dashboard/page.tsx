@@ -1,12 +1,12 @@
 "use client";
 
 import React from 'react';
-import { Link } from 'react-router-dom';
+import Link from 'next/link';
 import { Plus, FileText, TrendingUp, Calendar, ArrowRight, Sparkles } from 'lucide-react';
-import { BlogPostRecord } from '../types';
-import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '../components/ui/card';
-import { Button } from '../components/ui/button';
-import { Badge } from '../components/ui/badge';
+import { BlogPostRecord } from '../../types';
+import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '../../components/ui/card';
+import { Button } from '../../components/ui/button';
+import { Badge } from '../../components/ui/badge';
 
 export default function Dashboard() {
   const recentPosts: BlogPostRecord[] = [
@@ -22,7 +22,7 @@ export default function Dashboard() {
           <h1 className="text-4xl font-bold tracking-tight text-slate-900 mb-2">Dashboard</h1>
           <p className="text-slate-500 text-lg">Welcome back! Here's what's happening with your blog.</p>
         </div>
-        <Link to="/generate">
+        <Link href="/generate">
           <Button className="bg-purple-600 hover:bg-purple-700 shadow-lg shadow-purple-200 text-base px-6 py-6 rounded-full gap-2">
             <Sparkles size={18} fill="currentColor" className="text-purple-200" /> Create New Post
           </Button>
