@@ -46,10 +46,11 @@ export const performResearch = async (topic: string): Promise<ResearchResult> =>
     throw new Error("Failed to research topic.");
   }
 
-  // Step 2: Analyze the search results to get structured trend data
+  // Step 2: Analyze the search results to get structured trend data AND suggested topics
   try {
     const analysisPrompt = `
       Analyze the following research summary about "${topic}" and extract trend intelligence.
+      Then, based on these trends, brainstorm 4 specific, high-performing blog post titles that would appeal to readers right now.
       
       Research Summary:
       ${summary}
@@ -59,6 +60,9 @@ export const performResearch = async (topic: string): Promise<ResearchResult> =>
       - key_events: Array of key event strings
       - sources_news: Array of news source names mentioned
       - sources_social: Array of social media sources mentioned
+      - suggested_topics: Array of objects, each containing:
+          - title: A catchy, click-worthy blog post title.
+          - rationale: A short sentence explaining why this title works based on the research.
     `;
 
     const analysisResponse = await ai.models.generateContent({
@@ -73,8 +77,19 @@ export const performResearch = async (topic: string): Promise<ResearchResult> =>
             key_events: { type: Type.ARRAY, items: { type: Type.STRING } },
             sources_news: { type: Type.ARRAY, items: { type: Type.STRING } },
             sources_social: { type: Type.ARRAY, items: { type: Type.STRING } },
+            suggested_topics: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  title: { type: Type.STRING },
+                  rationale: { type: Type.STRING }
+                },
+                required: ["title", "rationale"]
+              }
+            }
           },
-          required: ["sentiment", "key_events", "sources_news", "sources_social"]
+          required: ["sentiment", "key_events", "sources_news", "sources_social", "suggested_topics"]
         }
       }
     });
@@ -84,7 +99,8 @@ export const performResearch = async (topic: string): Promise<ResearchResult> =>
       sentiment: 'neutral',
       key_events: [],
       sources_news: [],
-      sources_social: []
+      sources_social: [],
+      suggested_topics: []
     };
 
     // Ensure sentiment is valid
@@ -104,9 +120,37 @@ export const performResearch = async (topic: string): Promise<ResearchResult> =>
         sentiment: 'neutral',
         key_events: [],
         sources_news: [],
-        sources_social: []
+        sources_social: [],
+        suggested_topics: []
       }
     };
+  }
+};
+
+export const generateBlogImage = async (topic: string): Promise<string | null> => {
+  const ai = getAI();
+  try {
+    const response = await ai.models.generateImages({
+        model: 'imagen-4.0-generate-001',
+        prompt: `Create a high-quality, professional blog featured image for the topic: "${topic}".
+        Style guidelines: Modern, minimalist, editorial illustration, abstract tech or business concept, soft gradient lighting (purple, blue, orange). 
+        No text in the image.`,
+        config: {
+            numberOfImages: 1,
+            outputMimeType: 'image/jpeg',
+            aspectRatio: '16:9',
+        },
+    });
+
+    const image = response.generatedImages?.[0]?.image;
+    if (image && image.imageBytes) {
+        return `data:image/jpeg;base64,${image.imageBytes}`;
+    }
+    return null;
+  } catch (error) {
+    console.error("Image generation error:", error);
+    // Return null to allow the process to continue without an image if generation fails
+    return null; 
   }
 };
 
@@ -115,14 +159,14 @@ export const writeBlogPost = async (topic: string, researchSummary: string): Pro
 
   try {
     const prompt = `
-      You are a professional, empathetic, and witty blog writer. Write a **highly humanized** blog post about: "${topic}".
+      You are a professional, empathetic, and witty blog writer. Write a **highly humanized** blog post about the specific title: "${topic}".
       
-      Use the following research notes (which include dates):
+      Use the following background research notes (which include dates) to ground the article in fact, but write specifically for the chosen title:
       ${researchSummary}
 
       Requirements:
       1. Return the result as a JSON object.
-      2. "title": A catchy, click-worthy title.
+      2. "title": The final optimized title (should match the requested topic closely but can be polished).
       3. "content": The full blog post body in HTML format (use <h2>, <h3>, <p>, <ul>, etc.).
       4. **Tone**: Conversational, personal, and authoritative. Use sentence variety (mix short and long). Avoid stiff "AI-like" transitions (e.g., avoid "In conclusion", "Delving into", "In the rapidly evolving landscape").
       5. **Timeliness**: Incorporate the dates found in the research to show the reader this content is fresh and up-to-date.

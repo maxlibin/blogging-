@@ -24,7 +24,7 @@ const ToolbarButton = ({
   onClick: () => void; 
   isActive?: boolean; 
   disabled?: boolean; 
-  children: React.ReactNode;
+  children?: React.ReactNode;
   title?: string;
 }) => (
   <Button

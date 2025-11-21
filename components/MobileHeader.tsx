@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState } from 'react';
@@ -32,7 +33,11 @@ export const MobileHeader: React.FC = () => {
       
       {/* Mobile Sidebar */}
       <div className={`fixed inset-y-0 left-0 z-50 transform transition-transform duration-300 ease-in-out md:hidden ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <Sidebar className="h-full shadow-xl" onLinkClick={() => setIsOpen(false)} />
+        <Sidebar 
+          className="h-full shadow-xl" 
+          onLinkClick={() => setIsOpen(false)} 
+          showLabels={true}
+        />
       </div>
     </>
   );

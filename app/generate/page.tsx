@@ -1,8 +1,9 @@
+
 "use client";
 
-import React, { useState } from 'react';
-import { PostStatus, GeneratedPost, ResearchSource, ResearchResult } from '../../types';
-import { performResearch, writeBlogPost } from '../../services/gemini';
+import React, { useState, useEffect } from 'react';
+import { PostStatus, GeneratedPost, ResearchResult, SuggestedTopic } from '../../types';
+import { performResearch, writeBlogPost, generateBlogImage } from '../../services/gemini';
 import { draftToWordPress } from '../../services/wordpress';
 import { useWordPress } from '../../contexts/WordPressContext';
 import { 
@@ -12,14 +13,17 @@ import {
   Loader2, 
   CheckCircle2, 
   AlertTriangle, 
-  ExternalLink,
   Zap,
-  TrendingUp,
-  MessageSquare,
-  Newspaper,
-  Edit3
+  BarChart2,
+  Edit3,
+  Sparkles,
+  Image as ImageIcon,
+  Circle,
+  ArrowRight,
+  LayoutTemplate,
+  MousePointerClick
 } from 'lucide-react';
-import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '../../components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
 import { Button } from '../../components/ui/button';
 import { Label } from '../../components/ui/label';
@@ -28,70 +32,107 @@ import { Badge } from '../../components/ui/badge';
 import { TipTapEditor } from '../../components/TipTapEditor';
 import { cn } from '../../lib/utils';
 
+interface ThinkingStep {
+  id: string;
+  label: string;
+  status: 'waiting' | 'processing' | 'completed' | 'error';
+  icon?: React.ElementType;
+}
+
 export default function PostGenerator() {
   const { settings: wpSettings } = useWordPress();
-  const [topic, setTopic] = useState('');
+  
+  // State
+  const [broadTopic, setBroadTopic] = useState('');
   const [status, setStatus] = useState<PostStatus>(PostStatus.IDLE);
   const [researchData, setResearchData] = useState<ResearchResult | null>(null);
+  const [selectedTopic, setSelectedTopic] = useState<SuggestedTopic | null>(null);
   const [generatedPost, setGeneratedPost] = useState<GeneratedPost | null>(null);
-  const [editorContent, setEditorContent] = useState<string>(''); // State for Tiptap editor
+  const [editorContent, setEditorContent] = useState<string>(''); 
   const [error, setError] = useState<string | null>(null);
   const [publishResult, setPublishResult] = useState<{ id: number, link: string } | null>(null);
 
-  const isProcessing = status === PostStatus.RESEARCHING || status === PostStatus.WRITING || status === PostStatus.DRAFTING;
+  // Steps visualization state
+  const [steps, setSteps] = useState<ThinkingStep[]>([
+    { id: 'research', label: 'Trend Research', status: 'waiting', icon: Search },
+    { id: 'strategy', label: 'Topic Strategy', status: 'waiting', icon: LayoutTemplate },
+    { id: 'production', label: 'Content Production', status: 'waiting', icon: Edit3 },
+  ]);
 
-  const handleStart = async (e: React.FormEvent) => {
+  const updateStep = (id: string, status: ThinkingStep['status']) => {
+    setSteps(prev => prev.map(step => step.id === id ? { ...step, status } : step));
+  };
+
+  // --- STEP 1: Perform Research ---
+  const handleResearch = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!topic.trim()) return;
+    if (!broadTopic.trim()) return;
 
-    setStatus(PostStatus.RESEARCHING);
     setError(null);
-    setResearchData(null);
-    setGeneratedPost(null);
-    setEditorContent('');
-    setPublishResult(null);
+    setStatus(PostStatus.RESEARCHING);
+    updateStep('research', 'processing');
 
     try {
-      // 1. Research
-      const research = await performResearch(topic);
+      const research = await performResearch(broadTopic);
       setResearchData(research);
-
-      // 2. Write
-      setStatus(PostStatus.WRITING);
-      const postContent = await writeBlogPost(topic, research.summary); // Note: prompt might need to handle JSON summary now
-      
-      const fullPost: GeneratedPost = {
-        title: postContent.title,
-        content: postContent.content,
-        researchSummary: research.summary,
-        sources: research.sources
-      };
-      setGeneratedPost(fullPost);
-      setEditorContent(postContent.content); // Initialize editor
-
-      // 3. Auto Draft if Connected
-      if (wpSettings.isConnected) {
-        setStatus(PostStatus.DRAFTING);
-        const result = await draftToWordPress(wpSettings, postContent.title, postContent.content);
-        setPublishResult(result);
-        setStatus(PostStatus.COMPLETED);
-      } else {
-        setStatus(PostStatus.COMPLETED);
-      }
-
+      updateStep('research', 'completed');
+      updateStep('strategy', 'processing'); // Move focus to next step
+      setStatus(PostStatus.TOPIC_SELECTION);
     } catch (err: any) {
       console.error(err);
-      setError(err.message || "An unexpected error occurred.");
+      setError(err.message || "Research failed.");
       setStatus(PostStatus.FAILED);
+      updateStep('research', 'error');
+    }
+  };
+
+  // --- STEP 2: Select Topic & Generate ---
+  const handleSelectTopic = async (topic: SuggestedTopic) => {
+    setSelectedTopic(topic);
+    setStatus(PostStatus.GENERATING_IMAGE); // Start with image or writing
+    updateStep('strategy', 'completed');
+    updateStep('production', 'processing');
+    
+    try {
+        // Parallel Execution: Generate Image AND Write Post
+        const imagePromise = generateBlogImage(topic.title);
+        const writingPromise = writeBlogPost(topic.title, researchData?.summary || "");
+        
+        // We wait for writing to finish to show content, image can load in when ready if it takes longer
+        // but for simplicity in this flow, let's wait for both or handle sequentially
+        
+        setStatus(PostStatus.GENERATING_IMAGE);
+        const featuredImage = await imagePromise;
+        
+        setStatus(PostStatus.WRITING);
+        const postContent = await writingPromise;
+
+        const fullPost: GeneratedPost = {
+            title: postContent.title,
+            content: postContent.content,
+            researchSummary: researchData?.summary || "",
+            sources: researchData?.sources || [],
+            featuredImage: featuredImage || undefined
+        };
+
+        setGeneratedPost(fullPost);
+        setEditorContent(postContent.content);
+        updateStep('production', 'completed');
+        setStatus(PostStatus.COMPLETED);
+
+    } catch (err: any) {
+        console.error(err);
+        setError("Failed to generate content.");
+        setStatus(PostStatus.FAILED);
+        updateStep('production', 'error');
     }
   };
 
   const handleManualDraft = async () => {
     if (!generatedPost || !wpSettings.isConnected) return;
 
-    setStatus(PostStatus.DRAFTING);
+    setStatus(PostStatus.CONNECTING_WP);
     try {
-      // Use editorContent instead of generatedPost.content to include edits
       const result = await draftToWordPress(wpSettings, generatedPost.title, editorContent);
       setPublishResult(result);
       setStatus(PostStatus.COMPLETED);
@@ -101,231 +142,358 @@ export default function PostGenerator() {
     }
   };
 
+  const resetAll = () => {
+      setBroadTopic('');
+      setStatus(PostStatus.IDLE);
+      setResearchData(null);
+      setSelectedTopic(null);
+      setGeneratedPost(null);
+      setEditorContent('');
+      setPublishResult(null);
+      setSteps([
+        { id: 'research', label: 'Trend Research', status: 'waiting', icon: Search },
+        { id: 'strategy', label: 'Topic Strategy', status: 'waiting', icon: LayoutTemplate },
+        { id: 'production', label: 'Content Production', status: 'waiting', icon: Edit3 },
+      ]);
+  };
+
+  const getBreadcrumbText = () => {
+    if (status === PostStatus.IDLE) return 'New Project';
+    if (status === PostStatus.RESEARCHING) return 'Trend Research';
+    if (status === PostStatus.TOPIC_SELECTION) return 'Topic Strategy';
+    if (status === PostStatus.GENERATING_IMAGE || status === PostStatus.WRITING) return 'Content Production';
+    if (generatedPost) return 'Editor';
+    return 'Writer';
+  };
+
   return (
-    <div className="max-w-7xl mx-auto pb-20 space-y-8 animate-in fade-in duration-500">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight text-slate-900">Auto-Write Blog Post</h1>
-        <p className="text-slate-500 mt-2">Enter a topic to generate a trend report, write a humanized post, and edit it before drafting.</p>
+    <div className="w-full pb-20 space-y-8 animate-in fade-in duration-700">
+      
+      {/* Minimalist Breadcrumb Header */}
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2 text-sm font-medium">
+          <span className="text-slate-400 font-medium">Page:</span>
+          <span className="text-slate-700 font-semibold">Writer / {getBreadcrumbText()}</span>
+        </div>
+        
+        <div className="flex items-center gap-3">
+             {status !== PostStatus.IDLE && (
+                 <Button variant="ghost" size="sm" onClick={resetAll} className="text-slate-400 hover:text-red-500 h-9 px-3 text-xs font-medium">
+                    Start Over
+                 </Button>
+             )}
+             <div className="w-9 h-9 rounded-full border border-slate-200 bg-white flex items-center justify-center text-slate-400 hover:text-slate-600 cursor-help transition-colors shadow-sm">
+                <span className="font-bold text-sm">?</span>
+             </div>
+             <Button variant="outline" className="rounded-full h-9 px-5 text-xs font-bold border-slate-200 bg-white text-slate-700 hover:bg-slate-50 shadow-sm">
+                Share
+             </Button>
+        </div>
       </div>
 
-      {/* Topic Input */}
-      <Card className="border-indigo-100 shadow-md">
-        <CardContent className="p-6">
-          <form onSubmit={handleStart} className="flex flex-col md:flex-row gap-4 items-end">
-            <div className="flex-1 w-full space-y-2">
-              <Label htmlFor="topic">Topic or Keyword</Label>
-              <Input
-                id="topic"
-                type="text"
-                value={topic}
-                onChange={(e) => setTopic(e.target.value)}
-                placeholder="e.g. AI agents in 2025"
-                disabled={isProcessing}
-                className="h-12 text-lg"
-              />
-            </div>
-            <Button
-              type="submit"
-              size="lg"
-              disabled={!topic || isProcessing}
-              className="h-12 px-8 bg-indigo-600 hover:bg-indigo-700 w-full md:w-auto"
-            >
-              {isProcessing ? (
-                 <Loader2 className="animate-spin mr-2" />
-              ) : (
-                 <Zap className="mr-2 h-4 w-4" />
-              )}
-              {wpSettings.isConnected ? 'Generate & Draft' : 'Generate Report'}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
-
-      {/* Progress Steps */}
-      {(status !== PostStatus.IDLE) && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <StepCard 
-            icon={Search} 
-            title="Trend Radar Research" 
-            status={status === PostStatus.RESEARCHING ? 'active' : (researchData ? 'done' : 'pending')} 
-          />
-          <StepCard 
-            icon={FileText} 
-            title="Humanized Writing" 
-            status={status === PostStatus.WRITING ? 'active' : (generatedPost ? 'done' : 'pending')} 
-          />
-          <StepCard 
-            icon={Send} 
-            title="Draft to WordPress" 
-            status={status === PostStatus.DRAFTING ? 'active' : (publishResult ? 'done' : (wpSettings.isConnected ? 'pending' : 'pending'))} 
-            disabled={!wpSettings.isConnected && !publishResult && status !== PostStatus.DRAFTING}
-          />
-        </div>
-      )}
-
-      {error && (
-        <Alert variant="destructive">
-          <AlertTriangle className="h-4 w-4" />
-          <AlertTitle>Error</AlertTitle>
-          <AlertDescription className="flex flex-col gap-2">
-            <span>{error}</span>
-            <Button variant="outline" size="sm" onClick={() => setStatus(PostStatus.IDLE)} className="w-fit border-red-200 hover:bg-red-50 text-red-800">
-              Try Again
-            </Button>
-          </AlertDescription>
-        </Alert>
-      )}
-
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
         
-        {/* Left: Trend Radar Dashboard */}
-        {researchData && (
-          <div className="xl:col-span-1 space-y-6">
-            <h3 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
-              <TrendingUp size={20} className="text-blue-600" /> Trend Radar Analysis
-            </h3>
+        {/* --- LEFT COLUMN: Process & Intelligence --- */}
+        <div className="lg:col-span-3 space-y-6 sticky top-6">
             
-            {/* Sentiment */}
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base">Community Sentiment</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center gap-4">
-                  <div className="text-3xl font-bold text-slate-900 capitalize">{researchData.trendAnalysis.sentiment}</div>
-                  <Badge variant={researchData.trendAnalysis.sentiment === 'positive' ? 'success' : researchData.trendAnalysis.sentiment === 'negative' ? 'destructive' : 'secondary'}>
-                    {researchData.trendAnalysis.sentiment}
-                  </Badge>
-                </div>
-                <p className="text-sm text-slate-500 mt-2">Based on recent discussions and articles.</p>
-              </CardContent>
+            {/* Progress Stepper */}
+            <Card className="border-slate-200 shadow-sm overflow-hidden">
+                <CardContent className="p-6">
+                    <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-6">Process</h3>
+                    <div className="space-y-0 relative">
+                        {/* Connecting line background */}
+                        <div className="absolute left-5 top-4 bottom-4 w-0.5 bg-slate-100 z-0" />
+                        
+                        {steps.map((step, index) => {
+                            const Icon = step.icon || Circle;
+                            const isActive = step.status === 'processing';
+                            const isCompleted = step.status === 'completed';
+                            const isWaiting = step.status === 'waiting';
+                            
+                            return (
+                                <div key={step.id} className="relative z-10 flex items-start gap-4 pb-8 last:pb-0 group">
+                                    <div className={cn("w-10 h-10 rounded-full flex items-center justify-center border-2 shrink-0 transition-all duration-300 bg-white", 
+                                        isCompleted ? "border-green-500 text-green-600" :
+                                        isActive ? "border-purple-500 text-purple-600 shadow-[0_0_0_4px_rgba(168,85,247,0.1)]" :
+                                        step.status === 'error' ? "border-red-200 text-red-500" :
+                                        "border-slate-100 text-slate-300"
+                                    )}>
+                                        {isCompleted ? <CheckCircle2 size={18} strokeWidth={2.5} /> : 
+                                         isActive ? <Loader2 size={20} className="animate-spin" /> : 
+                                         <Icon size={18} />}
+                                    </div>
+                                    <div className="pt-2">
+                                        <h4 className={cn("font-bold text-sm leading-none", isActive ? "text-purple-900" : isCompleted ? "text-slate-900" : "text-slate-400")}>
+                                            {step.label}
+                                        </h4>
+                                        {isActive && (
+                                            <p className="text-[11px] text-purple-500 font-medium mt-1.5 animate-pulse">
+                                                {step.id === 'research' ? 'Scanning...' : step.id === 'production' ? 'Drafting...' : 'Thinking...'}
+                                            </p>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </CardContent>
             </Card>
 
-            {/* Key Drivers / Facts */}
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base">Key Drivers & Events</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                 {researchData.trendAnalysis.key_events.map((event, i) => (
-                   <div key={i} className="flex gap-3 items-start">
-                     <div className="min-w-[4px] h-4 mt-1 bg-indigo-500 rounded-full" />
-                     <p className="text-sm text-slate-700 leading-relaxed">{event}</p>
-                   </div>
-                 ))}
-              </CardContent>
-            </Card>
+            {/* Research Radar (Only visible after research is done) */}
+            {researchData && (
+                <Card className="border-slate-200 shadow-sm overflow-hidden animate-in slide-in-from-left-4 duration-500">
+                    <div className="px-6 pt-6 pb-2 flex items-center justify-between">
+                        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Trend Radar</h3>
+                        <BarChart2 size={14} className="text-slate-400" />
+                    </div>
+                    <CardContent className="p-6 space-y-6">
+                         {/* Sentiment */}
+                         <div>
+                            <div className="flex items-center justify-between mb-2">
+                               <span className="text-xs font-semibold text-slate-500">Market Sentiment</span>
+                               <Badge variant={researchData.trendAnalysis.sentiment === 'positive' ? 'success' : researchData.trendAnalysis.sentiment === 'negative' ? 'destructive' : 'secondary'} className="text-[10px] px-2 py-0 h-5">
+                                  {researchData.trendAnalysis.sentiment}
+                               </Badge>
+                            </div>
+                            <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                               <div className={cn("h-full rounded-full transition-all duration-1000 ease-out", 
+                                  researchData.trendAnalysis.sentiment === 'positive' ? "bg-green-500 w-[85%]" :
+                                  researchData.trendAnalysis.sentiment === 'negative' ? "bg-red-500 w-[25%]" : "bg-slate-400 w-[50%]"
+                               )} />
+                            </div>
+                         </div>
 
-             {/* Sources Breakdown */}
-             <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base">Intelligence Sources</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div>
-                    <h5 className="text-xs font-semibold text-slate-500 uppercase mb-2 flex items-center gap-1"><Newspaper size={12} /> News & Official</h5>
-                    <ul className="space-y-2">
-                      {researchData.trendAnalysis.sources_news.map((s, i) => (
-                        <li key={i} className="text-xs truncate text-slate-600 hover:text-indigo-600 transition-colors">
-                          <a href="#" className="flex items-center gap-2">
-                            <ExternalLink size={10} /> {s}
-                          </a>
-                        </li>
-                      ))}
-                      {researchData.trendAnalysis.sources_news.length === 0 && <li className="text-xs text-slate-400">No news sources found.</li>}
-                    </ul>
-                  </div>
-                  <div>
-                    <h5 className="text-xs font-semibold text-slate-500 uppercase mb-2 flex items-center gap-1"><MessageSquare size={12} /> Community & Social</h5>
-                    <ul className="space-y-2">
-                      {researchData.trendAnalysis.sources_social.map((s, i) => (
-                        <li key={i} className="text-xs truncate text-slate-600 hover:text-indigo-600 transition-colors">
-                          <a href="#" className="flex items-center gap-2">
-                            <ExternalLink size={10} /> {s}
-                          </a>
-                        </li>
-                      ))}
-                      {researchData.trendAnalysis.sources_social.length === 0 && <li className="text-xs text-slate-400">No social signals found.</li>}
-                    </ul>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        )}
+                         {/* Key Events */}
+                         <div className="space-y-3">
+                            <span className="text-xs font-semibold text-slate-500">Key Events & Signals</span>
+                            <div className="space-y-2">
+                               {researchData.trendAnalysis.key_events.slice(0, 3).map((event, i) => (
+                                  <div key={i} className="flex gap-2 items-start p-2 bg-slate-50 rounded-md border border-slate-100">
+                                     <div className="w-1.5 h-1.5 rounded-full bg-purple-500 mt-1.5 shrink-0" />
+                                     <p className="text-xs text-slate-700 leading-relaxed">{event}</p>
+                                  </div>
+                               ))}
+                            </div>
+                         </div>
+                    </CardContent>
+                </Card>
+            )}
+        </div>
 
-        {/* Right: Content Editor */}
-        {generatedPost && (
-          <div className="xl:col-span-2 animate-in fade-in slide-in-from-bottom-4 duration-500">
-             <Card className="h-full border-indigo-200/50 shadow-sm flex flex-col">
-                <CardHeader className="border-b border-slate-100 bg-slate-50/50 rounded-t-lg pb-4">
-                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                    <div className="space-y-1">
-                      <CardTitle className="flex items-center gap-2"><Edit3 size={18} className="text-indigo-600" /> Content Editor</CardTitle>
-                      <CardDescription>Edit your post below before publishing.</CardDescription>
+        {/* --- RIGHT COLUMN: Workspace --- */}
+        <div className="lg:col-span-9">
+            
+            {/* VIEW 1: Initial Input */}
+            {status === PostStatus.IDLE && (
+                <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-8 md:p-12 text-center space-y-8 min-h-[500px] flex flex-col justify-center items-center">
+                    <div className="max-w-lg mx-auto space-y-4">
+                        <div className="w-16 h-16 bg-purple-50 text-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                            <Sparkles size={32} />
+                        </div>
+                        <h2 className="text-3xl font-bold text-slate-900">What's your niche?</h2>
+                        <p className="text-slate-500 text-lg">Enter a broad topic (e.g., "Sustainable Fashion" or "AI in Marketing") and let our agents research trends for you.</p>
                     </div>
                     
-                    {publishResult ? (
-                      <Badge variant="success" className="px-3 py-1 text-sm flex gap-2 items-center">
-                         <CheckCircle2 size={14} /> Drafted in WP
-                         <a href={publishResult.link} target="_blank" rel="noreferrer" className="ml-2 underline text-white/90 hover:text-white">
-                           Open
-                         </a>
-                      </Badge>
-                    ) : (
-                      wpSettings.isConnected ? (
-                         <Button 
-                           onClick={handleManualDraft}
-                           disabled={status === PostStatus.DRAFTING}
-                           className="bg-slate-900 text-white hover:bg-slate-800"
-                           size="sm"
-                         >
-                           {status === PostStatus.DRAFTING ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : <Send className="mr-2 h-4 w-4" />}
-                           Draft to WordPress
-                         </Button>
-                      ) : (
-                        <Badge variant="warning">Connect WP to Draft</Badge>
-                      )
-                    )}
-                  </div>
-                </CardHeader>
-                
-                <div className="flex-1 bg-white p-0">
-                  {/* Pass the generated content and the change handler to the Tiptap editor */}
-                  <TipTapEditor 
-                    content={generatedPost.content} 
-                    onChange={setEditorContent} 
-                    className="min-h-[600px] border-none rounded-none shadow-none"
-                  />
+                    <form onSubmit={handleResearch} className="w-full max-w-xl mx-auto relative">
+                        <Input 
+                            value={broadTopic}
+                            onChange={(e) => setBroadTopic(e.target.value)}
+                            placeholder="Enter a topic..."
+                            className="h-14 text-lg pl-6 pr-14 rounded-xl shadow-md border-slate-200 focus:border-purple-500"
+                            autoFocus
+                        />
+                        <Button 
+                            type="submit" 
+                            disabled={!broadTopic}
+                            className="absolute right-2 top-2 h-10 w-10 p-0 rounded-lg bg-purple-600 hover:bg-purple-700"
+                        >
+                            <ArrowRight size={20} />
+                        </Button>
+                    </form>
+
+                    <div className="flex flex-wrap justify-center gap-3 pt-4">
+                        {['Crypto Trends', 'Healthy Living', 'SaaS Growth', 'Remote Work'].map(t => (
+                            <button key={t} onClick={() => setBroadTopic(t)} className="px-4 py-2 bg-slate-50 hover:bg-slate-100 text-slate-600 text-sm rounded-full border border-slate-200 transition-colors">
+                                {t}
+                            </button>
+                        ))}
+                    </div>
                 </div>
-             </Card>
-          </div>
-        )}
+            )}
+
+            {/* VIEW 2: Researching Loading State */}
+            {status === PostStatus.RESEARCHING && (
+                <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-12 min-h-[500px] flex flex-col justify-center items-center">
+                    <div className="relative">
+                        <div className="w-20 h-20 border-4 border-purple-100 border-t-purple-600 rounded-full animate-spin"></div>
+                        <div className="absolute inset-0 flex items-center justify-center">
+                            <Search size={24} className="text-purple-600" />
+                        </div>
+                    </div>
+                    <h3 className="text-xl font-bold text-slate-900 mt-8 mb-2">Analyzing the web for "{broadTopic}"</h3>
+                    <p className="text-slate-500 animate-pulse">Reading latest news • Identifying trends • Checking sources</p>
+                </div>
+            )}
+
+            {/* VIEW 3: Topic Selection */}
+            {status === PostStatus.TOPIC_SELECTION && researchData && (
+                <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
+                    <div className="flex items-center justify-between">
+                        <h2 className="text-2xl font-bold text-slate-900">Suggested Strategies</h2>
+                        <Badge variant="secondary" className="h-8 px-3 text-sm">Select a topic to generate</Badge>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {researchData.trendAnalysis.suggested_topics.map((topic, idx) => (
+                            <div 
+                                key={idx}
+                                onClick={() => handleSelectTopic(topic)}
+                                className="group relative bg-white rounded-xl border border-slate-200 p-6 cursor-pointer hover:border-purple-500 hover:shadow-lg hover:shadow-purple-100/50 transition-all duration-300 flex flex-col h-full"
+                            >
+                                <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <div className="w-8 h-8 bg-purple-600 text-white rounded-full flex items-center justify-center shadow-md">
+                                        <ArrowRight size={16} />
+                                    </div>
+                                </div>
+                                
+                                <div className="mb-4">
+                                    <span className="inline-block px-2 py-1 bg-purple-50 text-purple-700 text-xs font-bold rounded-md mb-3">
+                                        Option {idx + 1}
+                                    </span>
+                                    <h3 className="text-lg font-bold text-slate-900 leading-tight group-hover:text-purple-700 transition-colors">
+                                        {topic.title}
+                                    </h3>
+                                </div>
+                                
+                                <p className="text-sm text-slate-500 leading-relaxed flex-1">
+                                    {topic.rationale}
+                                </p>
+                                
+                                <div className="mt-6 pt-4 border-t border-slate-50 flex items-center gap-2 text-xs font-medium text-slate-400 group-hover:text-purple-600">
+                                    <MousePointerClick size={14} />
+                                    Click to write this article
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                    
+                    <div className="p-4 bg-slate-50 rounded-lg border border-slate-200 text-center">
+                         <p className="text-sm text-slate-500">Don't like these? <button onClick={() => setStatus(PostStatus.IDLE)} className="text-purple-600 font-bold hover:underline">Refine your topic</button></p>
+                    </div>
+                </div>
+            )}
+
+            {/* VIEW 4: Generating / Writing Loading State */}
+            {(status === PostStatus.WRITING || status === PostStatus.GENERATING_IMAGE) && selectedTopic && (
+                <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-12 min-h-[500px] flex flex-col justify-center items-center text-center">
+                    <div className="relative mb-8">
+                         {/* Overlapping avatars for agents */}
+                         <div className="flex items-center justify-center">
+                            <div className="w-16 h-16 bg-white rounded-full border-4 border-white shadow-lg z-20 flex items-center justify-center text-purple-600 overflow-hidden relative">
+                                <div className="absolute inset-0 border-4 border-purple-100 border-t-purple-600 rounded-full animate-spin"></div>
+                                <Edit3 size={24} />
+                            </div>
+                            <div className="w-16 h-16 bg-white rounded-full border-4 border-white shadow-lg z-10 -ml-6 flex items-center justify-center text-orange-500 overflow-hidden relative">
+                                <div className="absolute inset-0 border-4 border-orange-100 border-b-orange-500 rounded-full animate-spin"></div>
+                                <ImageIcon size={24} />
+                            </div>
+                         </div>
+                    </div>
+                    
+                    <h3 className="text-xl font-bold text-slate-900 mb-2">
+                        Creating content for <br/>
+                        <span className="text-purple-600">"{selectedTopic.title}"</span>
+                    </h3>
+                    
+                    <div className="space-y-2 mt-6 max-w-md">
+                        <div className="flex items-center justify-between text-xs font-bold text-slate-400 uppercase tracking-wider">
+                            <span>Progress</span>
+                            <span>{status === PostStatus.GENERATING_IMAGE ? '40%' : '85%'}</span>
+                        </div>
+                        <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                            <div className={cn("h-full bg-purple-600 rounded-full transition-all duration-[2000ms]", status === PostStatus.GENERATING_IMAGE ? "w-[40%]" : "w-[85%]")}></div>
+                        </div>
+                        <p className="text-sm text-slate-500 pt-2">
+                            {status === PostStatus.GENERATING_IMAGE ? "Designing custom featured image..." : "Drafting final paragraphs..."}
+                        </p>
+                    </div>
+                </div>
+            )}
+
+            {/* VIEW 5: Completed Editor */}
+            {(status === PostStatus.COMPLETED || status === PostStatus.CONNECTING_WP || status === PostStatus.DRAFTING) && generatedPost && (
+               <Card className="border-slate-200 shadow-xl shadow-slate-200/50 overflow-hidden flex flex-col animate-in fade-in duration-500">
+                  {/* Editor Toolbar Header */}
+                  <div className="h-16 border-b border-slate-100 flex items-center justify-between px-6 bg-white sticky top-0 z-20">
+                     <div className="flex items-center gap-3">
+                        <Badge variant="secondary" className="rounded-md bg-purple-50 text-purple-700 border-purple-100">
+                           AI Generated
+                        </Badge>
+                     </div>
+                     
+                     <div className="flex items-center gap-3">
+                        {publishResult ? (
+                           <Badge variant="success" className="h-9 px-4 rounded-md gap-2 text-sm">
+                              <CheckCircle2 size={14} /> Published
+                              <a href={publishResult.link} target="_blank" rel="noreferrer" className="underline text-white/80 hover:text-white">View</a>
+                           </Badge>
+                        ) : (
+                           wpSettings.isConnected ? (
+                              <Button onClick={handleManualDraft} disabled={status === PostStatus.CONNECTING_WP} className="bg-slate-900 text-white hover:bg-slate-800 rounded-md h-9 px-6 font-bold text-xs">
+                                 {status === PostStatus.CONNECTING_WP ? <Loader2 className="animate-spin mr-2 h-3 w-3" /> : <Zap className="mr-2 h-3 w-3" />}
+                                 Publish to WordPress
+                              </Button>
+                           ) : (
+                              <div className="flex items-center gap-2">
+                                  <Badge variant="warning" className="h-9 px-4 rounded-md">Connect WP to Publish</Badge>
+                              </div>
+                           )
+                        )}
+                     </div>
+                  </div>
+
+                  {/* Editor Body */}
+                  <div className="flex-1 bg-white p-0 relative flex flex-col">
+                     
+                     {/* Featured Image Section */}
+                     {generatedPost.featuredImage && (
+                        <div className="w-full bg-slate-50 relative group border-b border-slate-100">
+                           <div className="aspect-video max-h-[400px] w-full overflow-hidden relative">
+                               <img 
+                                  src={generatedPost.featuredImage} 
+                                  alt="Featured" 
+                                  className="w-full h-full object-cover" 
+                               />
+                           </div>
+                           <div className="absolute top-4 left-4 bg-white/90 backdrop-blur-sm text-slate-900 px-3 py-1.5 rounded-md text-xs font-bold flex items-center gap-2 shadow-sm">
+                              <ImageIcon size={12} className="text-purple-600" /> Featured Image
+                           </div>
+                        </div>
+                     )}
+
+                     <div className="flex-1">
+                         <TipTapEditor 
+                            content={generatedPost.content} 
+                            onChange={setEditorContent} 
+                            className="border-none shadow-none rounded-none min-h-[600px] p-8 md:p-12"
+                         />
+                     </div>
+                  </div>
+               </Card>
+            )}
+            
+            {/* Error State */}
+            {error && (
+                <Alert variant="destructive" className="mt-6 border-red-200 bg-red-50 text-red-900 rounded-xl">
+                    <AlertTriangle className="h-5 w-5 text-red-600" />
+                    <AlertTitle className="text-lg font-bold text-red-700">Process Failed</AlertTitle>
+                    <AlertDescription className="mt-2">
+                        {error}
+                    </AlertDescription>
+                </Alert>
+            )}
+        </div>
       </div>
     </div>
   );
 }
-
-const StepCard = ({ icon: Icon, title, status, disabled }: { icon: any, title: string, status: 'pending' | 'active' | 'done', disabled?: boolean }) => {
-  return (
-    <Card className={cn("transition-all duration-300", 
-        disabled && "opacity-50 bg-slate-50",
-        status === 'active' && "border-indigo-500 ring-1 ring-indigo-500 shadow-md",
-        status === 'done' && "border-green-500 bg-green-50/30"
-      )}>
-      <CardContent className="p-4 flex items-center gap-3">
-        <div className={cn("p-2 rounded-full", 
-          status === 'active' ? "bg-indigo-100 text-indigo-600" : 
-          status === 'done' ? "bg-green-100 text-green-600" : "bg-slate-100 text-slate-400"
-        )}>
-          {status === 'active' ? <Loader2 className="animate-spin h-5 w-5" /> : (status === 'done' ? <CheckCircle2 className="h-5 w-5" /> : <Icon className="h-5 w-5" />)}
-        </div>
-        <div className="flex flex-col">
-          <span className={cn("font-medium text-sm", status === 'active' ? "text-indigo-900" : "text-slate-700")}>{title}</span>
-          {status === 'active' && <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider">Processing...</span>}
-        </div>
-      </CardContent>
-    </Card>
-  );
-};

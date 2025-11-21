@@ -11,7 +11,7 @@ interface WordPressContextType {
 
 const WordPressContext = createContext<WordPressContextType | undefined>(undefined);
 
-export const WordPressProvider = ({ children }: { children: React.ReactNode }) => {
+export const WordPressProvider = ({ children }: { children?: React.ReactNode }) => {
   const [settings, setSettings] = useState<WordPressSettings>({
     siteUrl: '',
     username: '',

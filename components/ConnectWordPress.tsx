@@ -19,7 +19,6 @@ export const ConnectWordPress: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
-  // Sync form with context if context changes externally
   useEffect(() => {
     setFormData(settings);
   }, [settings]);
@@ -49,34 +48,39 @@ export const ConnectWordPress: React.FC = () => {
   };
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
-      <div>
+    <div className="max-w-3xl mx-auto space-y-8 animate-in fade-in duration-700">
+      <div className="flex flex-col gap-2">
         <h1 className="text-3xl font-bold tracking-tight text-slate-900">Connect Blog</h1>
-        <p className="text-slate-500 mt-2">Enter your WordPress Application Password credentials to enable auto-posting.</p>
+        <p className="text-slate-500 text-lg">Enter your WordPress Application Password credentials to enable auto-posting.</p>
       </div>
 
-      <Card>
-        <CardHeader>
+      <Card className="border-slate-100 shadow-lg shadow-slate-200/50 overflow-hidden">
+        <div className="h-1.5 bg-gradient-to-r from-blue-500 to-purple-500 w-full"></div>
+        <CardHeader className="p-8 pb-4">
           <div className="flex items-center justify-between">
             <div className="space-y-1">
               <CardTitle>WordPress Credentials</CardTitle>
               <CardDescription>
-                Provide your site details securely.
+                Provide your site details securely. We do not store your password on our servers.
               </CardDescription>
             </div>
-            {settings.isConnected && (
-              <Badge variant="success" className="flex gap-1">
-                <CheckCircle size={12} /> Connected
+            {settings.isConnected ? (
+              <Badge variant="success" className="flex gap-1.5 px-3 py-1.5 rounded-full text-sm">
+                <CheckCircle size={14} /> Connected
+              </Badge>
+            ) : (
+              <Badge variant="secondary" className="flex gap-1.5 px-3 py-1.5 rounded-full text-sm">
+                 Not Connected
               </Badge>
             )}
           </div>
         </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
+        <CardContent className="p-8 pt-4">
+          <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-2">
-              <Label htmlFor="siteUrl">Site URL</Label>
+              <Label htmlFor="siteUrl" className="text-slate-700 font-semibold">Site URL</Label>
               <div className="relative">
-                <Globe className="absolute left-3 top-2.5 text-slate-400" size={16} />
+                <Globe className="absolute left-4 top-3.5 text-slate-400" size={18} />
                 <Input
                   id="siteUrl"
                   type="url"
@@ -84,17 +88,17 @@ export const ConnectWordPress: React.FC = () => {
                   placeholder="https://yourblog.com"
                   value={formData.siteUrl}
                   onChange={handleChange}
-                  className="pl-10"
+                  className="pl-12 h-12 rounded-xl bg-slate-50/50 border-slate-200 focus:bg-white focus:border-purple-500"
                   required
                 />
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
-                <Label htmlFor="username">Username</Label>
+                <Label htmlFor="username" className="text-slate-700 font-semibold">Username</Label>
                 <div className="relative">
-                  <User className="absolute left-3 top-2.5 text-slate-400" size={16} />
+                  <User className="absolute left-4 top-3.5 text-slate-400" size={18} />
                   <Input
                     id="username"
                     type="text"
@@ -102,7 +106,7 @@ export const ConnectWordPress: React.FC = () => {
                     placeholder="admin"
                     value={formData.username}
                     onChange={handleChange}
-                    className="pl-10"
+                    className="pl-12 h-12 rounded-xl bg-slate-50/50 border-slate-200 focus:bg-white focus:border-purple-500"
                     required
                   />
                 </div>
@@ -110,11 +114,11 @@ export const ConnectWordPress: React.FC = () => {
               
               <div className="space-y-2">
                 <Label htmlFor="appPassword">
-                  Application Password
-                  <a href="https://make.wordpress.org/core/2020/11/05/application-passwords-integration-guide/" target="_blank" rel="noreferrer" className="ml-2 text-xs text-indigo-600 hover:underline">What's this?</a>
+                  <span className="text-slate-700 font-semibold">Application Password</span>
+                  <a href="https://make.wordpress.org/core/2020/11/05/application-passwords-integration-guide/" target="_blank" rel="noreferrer" className="ml-2 text-xs text-purple-600 hover:underline font-medium">What's this?</a>
                 </Label>
                 <div className="relative">
-                  <Lock className="absolute left-3 top-2.5 text-slate-400" size={16} />
+                  <Lock className="absolute left-4 top-3.5 text-slate-400" size={18} />
                   <Input
                     id="appPassword"
                     type="password"
@@ -122,7 +126,7 @@ export const ConnectWordPress: React.FC = () => {
                     placeholder="xxxx xxxx xxxx xxxx"
                     value={formData.appPassword}
                     onChange={handleChange}
-                    className="pl-10"
+                    className="pl-12 h-12 rounded-xl bg-slate-50/50 border-slate-200 focus:bg-white focus:border-purple-500"
                     required
                   />
                 </div>
@@ -130,26 +134,26 @@ export const ConnectWordPress: React.FC = () => {
             </div>
 
             {error && (
-              <Alert variant="destructive">
-                <AlertCircle className="h-4 w-4" />
-                <AlertTitle>Error</AlertTitle>
+              <Alert variant="destructive" className="rounded-xl bg-red-50 border-red-100 text-red-800">
+                <AlertCircle className="h-4 w-4 text-red-600" />
+                <AlertTitle>Connection Failed</AlertTitle>
                 <AlertDescription>{error}</AlertDescription>
               </Alert>
             )}
             
             {success && (
-              <Alert className="border-green-200 bg-green-50 text-green-800">
+              <Alert className="rounded-xl bg-green-50 border-green-100 text-green-800">
                 <CheckCircle className="h-4 w-4 text-green-600" />
                 <AlertTitle className="text-green-800">Success</AlertTitle>
                 <AlertDescription className="text-green-700">Connection validated successfully!</AlertDescription>
               </Alert>
             )}
             
-             <div className="flex justify-end pt-2">
+             <div className="flex justify-end pt-4 border-t border-slate-50">
               <Button
                 type="submit"
                 disabled={isValidating}
-                className="w-full md:w-auto"
+                className="w-full md:w-auto rounded-full bg-slate-900 hover:bg-slate-800 px-8 h-11 font-bold"
               >
                 {isValidating ? (
                   <>
