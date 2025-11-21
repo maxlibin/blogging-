@@ -7,11 +7,12 @@ import { eq, and } from 'drizzle-orm';
 // GET /api/posts/[id] - Fetch single post
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const user = await getCurrentUser();
-    const postId = parseInt(params.id);
+    const { id } = await params;
+    const postId = parseInt(id);
 
     if (isNaN(postId)) {
       return NextResponse.json(
@@ -57,11 +58,12 @@ export async function GET(
 // PATCH /api/posts/[id] - Update post
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const user = await getCurrentUser();
-    const postId = parseInt(params.id);
+    const { id } = await params;
+    const postId = parseInt(id);
     const body = await request.json();
 
     if (isNaN(postId)) {
@@ -108,11 +110,12 @@ export async function PATCH(
 // DELETE /api/posts/[id] - Delete post
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const user = await getCurrentUser();
-    const postId = parseInt(params.id);
+    const { id } = await params;
+    const postId = parseInt(id);
 
     if (isNaN(postId)) {
       return NextResponse.json(

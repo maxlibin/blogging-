@@ -2,6 +2,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { PostStatus, GeneratedPost, ResearchResult, SuggestedTopic } from '../../../types';
 import { draftToWordPress } from '../../../lib/wordpress';
 import { useWordPress } from '../../../contexts/WordPressContext';
@@ -51,6 +52,8 @@ export default function PostGenerator() {
   const [error, setError] = useState<string | null>(null);
   const [publishResult, setPublishResult] = useState<{ id: number, link: string } | null>(null);
   const [currentPostId, setCurrentPostId] = useState<number | null>(null);
+  const [allPosts, setAllPosts] = useState<any[]>([]);
+  const [loadingPosts, setLoadingPosts] = useState(false);
 
   // Steps visualization state
   const [steps, setSteps] = useState<ThinkingStep[]>([
@@ -62,6 +65,109 @@ export default function PostGenerator() {
   const updateStep = (id: string, status: ThinkingStep['status']) => {
     setSteps(prev => prev.map(step => step.id === id ? { ...step, status } : step));
   };
+
+  // Load existing post if postId is in URL
+  const searchParams = useSearchParams();
+  const postId = searchParams.get('postId');
+
+  useEffect(() => {
+    if (postId) {
+      loadPost(parseInt(postId));
+    }
+  }, [postId]);
+
+  const loadPost = async (id: number) => {
+    try {
+      const response = await fetch(`/api/posts/${id}`);
+      if (!response.ok) return;
+      
+      const post = await response.json();
+      console.log('Loaded post:', post);
+      setCurrentPostId(post.id);
+      
+      // Load research data if available
+      if (post.researchSummary && post.trendAnalysis) {
+        console.log('Loading research data with trend analysis:', post.trendAnalysis);
+        
+        const researchResult: ResearchResult = {
+          summary: post.researchSummary,
+          sources: post.sources || [],
+          trendAnalysis: post.trendAnalysis,
+        };
+        
+        setResearchData(researchResult);
+        console.log('Research data set:', researchResult);
+        console.log('Suggested topics:', post.trendAnalysis.suggested_topics);
+        
+        // If content exists, show completed state
+        if (post.content) {
+          setGeneratedPost({
+            title: post.title,
+            content: post.content,
+            researchSummary: post.researchSummary || '',
+            sources: post.sources || [],
+            featuredImage: post.featuredImageUrl || undefined,
+          });
+          setEditorContent(post.content);
+          setStatus(PostStatus.COMPLETED);
+          updateStep('research', 'completed');
+          updateStep('strategy', 'completed');
+          updateStep('production', 'completed');
+        } else {
+          // Show topic selection with suggested topics
+          console.log('Setting status to TOPIC_SELECTION');
+          // Use setTimeout to ensure researchData state is fully set before changing status
+          setTimeout(() => {
+            setStatus(PostStatus.TOPIC_SELECTION);
+            updateStep('research', 'completed');
+            updateStep('strategy', 'processing');
+          }, 100);
+        }
+      } else if (post.content) {
+        // Only content, no research data
+        setGeneratedPost({
+          title: post.title,
+          content: post.content,
+          researchSummary: post.researchSummary || '',
+          sources: post.sources || [],
+          featuredImage: post.featuredImageUrl || undefined,
+        });
+        setEditorContent(post.content);
+        setStatus(PostStatus.COMPLETED);
+        updateStep('research', 'completed');
+        updateStep('strategy', 'completed');
+        updateStep('production', 'completed');
+      }
+      
+      // Load WordPress link if published
+      if (post.wordpressLink) {
+        setPublishResult({ id: post.wordpressId, link: post.wordpressLink });
+      }
+    } catch (error) {
+      console.error('Failed to load post:', error);
+    }
+  };
+
+  // Fetch all posts for sidebar
+  const fetchAllPosts = async () => {
+    setLoadingPosts(true);
+    try {
+      const response = await fetch('/api/posts');
+      if (response.ok) {
+        const posts = await response.json();
+        setAllPosts(posts);
+      }
+    } catch (error) {
+      console.error('Failed to fetch posts:', error);
+    } finally {
+      setLoadingPosts(false);
+    }
+  };
+
+  // Load posts on mount
+  useEffect(() => {
+    fetchAllPosts();
+  }, []);
 
   // --- STEP 1: Perform Research ---
   const handleResearch = async (e: React.FormEvent) => {
@@ -308,6 +414,59 @@ export default function PostGenerator() {
                         })}
                     </div>
                 </CardContent>
+            </Card>
+
+            {/* Articles List */}
+            <Card className="border-slate-200 shadow-sm overflow-hidden">
+              <CardHeader className="pb-3 border-b border-slate-100">
+                <CardTitle className="text-sm font-bold text-slate-700">Your Articles</CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                {loadingPosts ? (
+                  <div className="p-4 text-center text-slate-400">
+                    <Loader2 className="h-4 w-4 animate-spin mx-auto" />
+                  </div>
+                ) : allPosts.length === 0 ? (
+                  <div className="p-4 text-center text-slate-400 text-xs">
+                    No articles yet
+                  </div>
+                ) : (
+                  <div className="max-h-[400px] overflow-y-auto">
+                    {allPosts.map((post) => (
+                      <button
+                        key={post.id}
+                        onClick={() => {
+                          window.location.href = `/generate?postId=${post.id}`;
+                        }}
+                        className={cn(
+                          "w-full text-left p-3 hover:bg-slate-50 transition-colors border-b border-slate-50 last:border-0",
+                          currentPostId === post.id && "bg-purple-50 hover:bg-purple-50"
+                        )}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <h4 className={cn(
+                              "text-xs font-semibold truncate",
+                              currentPostId === post.id ? "text-purple-700" : "text-slate-700"
+                            )}>
+                              {post.title}
+                            </h4>
+                            <p className="text-[10px] text-slate-400 mt-0.5">
+                              {new Date(post.updatedAt).toLocaleDateString()}
+                            </p>
+                          </div>
+                          <Badge 
+                            variant={post.status === 'published' ? 'success' : post.status === 'draft' ? 'secondary' : 'warning'}
+                            className="text-[9px] px-1.5 py-0.5 shrink-0"
+                          >
+                            {post.status}
+                          </Badge>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
             </Card>
 
             {/* Research Radar (Only visible after research is done) */}

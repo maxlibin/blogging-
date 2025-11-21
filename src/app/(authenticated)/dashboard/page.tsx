@@ -94,31 +94,39 @@ export default function Dashboard() {
               ) : (
                 <div className="space-y-2">
                   {recentPosts.map((post) => (
-                    <div key={post.id} className="flex items-center justify-between p-4 hover:bg-slate-50 rounded-2xl transition-all group border border-transparent hover:border-slate-100">
-                      <div className="flex items-center gap-4">
-                         <div className="w-10 h-10 rounded-full bg-purple-50 text-purple-600 flex items-center justify-center">
-                            <FileText size={18} />
-                         </div>
-                         <div>
-                          <h4 className="font-bold text-slate-900 group-hover:text-purple-600 transition-colors">{post.title}</h4>
-                          <p className="text-xs text-slate-400 font-medium">Updated on {new Date(post.updatedAt).toLocaleDateString()}</p>
-                         </div>
-                      </div>
-                      <div className="flex items-center gap-4">
-                        <StatusBadge status={post.status} />
-                        {post.wordpressLink ? (
-                          <a href={post.wordpressLink} target="_blank" rel="noopener noreferrer">
+                    <Link key={post.id} href={`/generate?postId=${post.id}`}>
+                      <div className="flex items-center justify-between p-4 hover:bg-slate-50 rounded-2xl transition-all group border border-transparent hover:border-slate-100 cursor-pointer">
+                        <div className="flex items-center gap-4">
+                           <div className="w-10 h-10 rounded-full bg-purple-50 text-purple-600 flex items-center justify-center">
+                              <FileText size={18} />
+                           </div>
+                           <div>
+                            <h4 className="font-bold text-slate-900 group-hover:text-purple-600 transition-colors">{post.title}</h4>
+                            <p className="text-xs text-slate-400 font-medium">Updated on {new Date(post.updatedAt).toLocaleDateString()}</p>
+                           </div>
+                        </div>
+                        <div className="flex items-center gap-4">
+                          <StatusBadge status={post.status} />
+                          {post.wordpressLink ? (
+                            <a 
+                              href={post.wordpressLink} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="hover:scale-110 transition-transform"
+                            >
+                              <Button variant="ghost" size="icon" className="text-slate-300 group-hover:text-purple-600 transition-colors rounded-full">
+                                <ArrowRight size={18} />
+                              </Button>
+                            </a>
+                          ) : (
                             <Button variant="ghost" size="icon" className="text-slate-300 group-hover:text-purple-600 transition-colors rounded-full">
                               <ArrowRight size={18} />
                             </Button>
-                          </a>
-                        ) : (
-                          <Button variant="ghost" size="icon" className="text-slate-300 group-hover:text-purple-600 transition-colors rounded-full">
-                            <ArrowRight size={18} />
-                          </Button>
-                        )}
+                          )}
+                        </div>
                       </div>
-                    </div>
+                    </Link>
                   ))}
                 </div>
               )}
